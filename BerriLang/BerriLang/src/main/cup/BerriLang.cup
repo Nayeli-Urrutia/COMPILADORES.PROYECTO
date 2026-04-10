@@ -1,0 +1,617 @@
+/* ============================================================
+   BerriLang.cup
+   Especificación CUP para el analizador sintáctico de BerriLang
+   Universidad Mariano Gálvez - Compiladores 2026
+
+   ESTRUCTURA DE UN ARCHIVO .cup:
+   ─────────────────────────────────
+   SECCIÓN 1: Declaraciones
+              - imports, código Java, parser class
+              - terminales (tokens que vienen del léxico)
+              - no terminales (símbolos de la gramática)
+   SECCIÓN 2: Precedencia y asociatividad de operadores
+   SECCIÓN 3: Gramática (producciones BNF con acciones)
+   ============================================================ */
+
+
+/* ============================================================
+   SECCIÓN 1 — Declaraciones
+   Aquí declaras:
+     - Código Java que se copia a la clase generada
+     - Los terminales: cada token que produce el Lexer
+     - Los no terminales: símbolos que define la gramática
+   ============================================================ */
+
+/* Imports y código Java inicial */
+import Com.berrylang.parser;
+import com.berrylang.model.ErrorEntry;
+import com.berrylang.model.SimboloEntry;
+import java.util.ArrayList;
+import java.util.List;
+
+/* Código que va dentro de la clase Parser generada */
+parser code  {:
+    /* Lista de errores sintácticos */
+    private List<ErrorEntry> errores = new ArrayList<>();
+    private List<SimboloEntry> simbolos = new ArrayList<>();
+
+    public List<ErrorEntry> getErrores() { return errores; }
+    public List<SimboloEntry> getSimbolos() { return simbolos; }
+
+    /* CUP llama a este método cuando encuentra un error sintáctico */
+    @Override
+    public void report_error(String message, Object info) {
+        int linea = 0, columna = 0;
+        if (info instanceof java_cup.runtime.Symbol) {
+            java_cup.runtime.Symbol sym = (java_cup.runtime.Symbol) info;
+            if (sym.left >= 0)  linea   = sym.left;
+            if (sym.right >= 0) columna = sym.right;
+        }
+        errores.add(new ErrorEntry(
+            ErrorEntry.TipoError.SINTACTICO,
+            message,
+            linea,
+            columna,
+            "Error de análisis sintáctico"
+        ));
+    }
+
+    @Override
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+    }
+
+    /* Auxiliar para registrar un símbolo en la tabla */
+    private void registrarSimbolo(String nombre, String tipo, String valor, int linea, int col, String ambito) {
+        simbolos.add(new SimboloEntry(nombre, tipo, valor, linea, col, ambito));
+    }
+:}
+
+/* Código de inicialización (se ejecuta antes de parsear) */
+init with {:
+    /* Aquí puedes inicializar estructuras adicionales */
+:}
+
+/* Código para obtener el siguiente token del lexer */
+scan with {:
+    return getScanner().next_token();
+:}
+
+
+/* ── Terminales sin valor ────────────────────────────────────
+   Son los tokens cuyo valor no nos interesa en la gramática,
+   solo importa su presencia (palabras reservadas, delimitadores).
+   Sintaxis: terminal NOMBRE_TOKEN;
+   ─────────────────────────────────────────────────────────── */
+
+/* Palabras reservadas */
+terminal NAKAMA, KAIZOKU;
+terminal YORU, ZORO, GOMU, HAKI;
+terminal LUFFY, NAMI_ELSE;
+terminal CHOPPER, ROBIN;
+terminal NAMI, USOPP, SANJI, DENDEN;
+terminal MERA, KAIRYU;
+
+/* Operadores */
+terminal MAS, MENOS, POR, DIVIDIR, MODULO;
+terminal IGUAL_IGUAL, DIFERENTE;
+terminal MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL;
+terminal Y, O, NO;
+terminal ASIGNAR;
+terminal FLECHA;
+
+/* Delimitadores */
+terminal PAREN_ABRE, PAREN_CIERRA;
+terminal LLAVE_ABRE, LLAVE_CIERRA;
+terminal PUNTO_COMA, DOS_PUNTOS, COMA;
+
+
+/* ── Terminales CON valor ────────────────────────────────────
+   Son los tokens que llevan un valor asociado (el lexema).
+   Sintaxis: terminal TipoJava NOMBRE_TOKEN;
+   El tipo Java es el tipo del campo .value en el Symbol de CUP.
+   ─────────────────────────────────────────────────────────── */
+
+terminal String  ID;       /* identificadores: suma, x, nombreVariable */
+terminal Integer ENTERO;   /* literales enteros: 10, 200, 0            */
+terminal Double  DECIMAL;  /* literales decimales: 3.14, 1.81          */
+terminal String  CADENA;   /* literales de texto: "hola nakama"        */
+
+
+/* ── No terminales ───────────────────────────────────────────
+   Son los símbolos que define la gramática. Su tipo Java
+   es el tipo del árbol AST que construye la producción.
+   Sintaxis: non terminal TipoJava nombre_no_terminal;
+   ─────────────────────────────────────────────────────────── */
+
+non terminal NodoAST        programa;
+non terminal NodoAST        declaraciones, declaracion, tipo;
+non terminal NodoAST        instrucciones, instruccion;
+non terminal NodoAST        asignacion;
+non terminal NodoAST        condicional;
+non terminal NodoAST        ciclo_while, ciclo_for;
+non terminal NodoAST        impresion, retorno;
+non terminal NodoAST        funcion_def, params, param;
+non terminal NodoAST        expresion;
+non terminal NodoAST        expr_or, expr_and;
+non terminal NodoAST        expr_igualdad, expr_relacional;
+non terminal NodoAST        expr_suma, expr_mult, expr_unaria;
+non terminal NodoAST        primaria;
+non terminal String         tipo_str;    /* auxiliar para guardar el nombre del tipo */
+
+
+/* ============================================================
+   SECCIÓN 2 — Precedencia y asociatividad
+   CUP es un parser LALR(1). Cuando hay ambigüedad en la
+   gramática (conflictos shift/reduce), se resuelven por
+   precedencia. Las reglas de más abajo tienen MAYOR precedencia.
+
+   - precedence left  → asociatividad izquierda  (a+b+c = (a+b)+c)
+   - precedence right → asociatividad derecha    (a=b=c = a=(b=c))
+   - precedence nonassoc → no asociativo (no se puede encadenar)
+   ============================================================ */
+
+precedence left  O;                            /* menor prioridad */
+precedence left  Y;
+precedence left  IGUAL_IGUAL, DIFERENTE;
+precedence left  MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL;
+precedence left  MAS, MENOS;
+precedence left  POR, DIVIDIR, MODULO;
+precedence right NO;                           /* unario derecho  */
+precedence right MENOS;                        /* unario negativo */
+
+
+/* ── Símbolo inicial de la gramática ─────────────────────── */
+start with programa;
+
+
+/* ============================================================
+   SECCIÓN 3 — Gramática con acciones semánticas
+   Cada producción tiene el formato:
+       no_terminal ::= simbolos {: accion_Java :}
+
+   En las acciones:
+     - RESULT  = valor que retorna esta producción (tipo del no terminal)
+     - xleft   = línea donde inicia el símbolo x
+     - xright  = columna donde inicia el símbolo x
+     - x       = valor del terminal/no-terminal x (el campo .value)
+   ============================================================ */
+
+/* ── Programa ──────────────────────────────────────────────── */
+
+programa ::= NAKAMA ID:nombre LLAVE_ABRE
+                declaraciones:decls
+                instrucciones:insts
+             LLAVE_CIERRA
+             KAIZOKU
+             {:
+                 NodoAST nodo = new NodoAST("Programa", nombre);
+                 nodo.agregarHijo(decls);
+                 nodo.agregarHijo(insts);
+                 RESULT = nodo;
+             :}
+           | error
+             {:
+                 RESULT = new NodoAST("Programa", "<error>");
+                 parser.report_error("Se esperaba 'nakama NombrePrograma { ... } kaizoku'", null);
+             :}
+           ;
+
+
+/* ── Declaraciones ─────────────────────────────────────────── */
+
+declaraciones ::= declaraciones:lista declaracion:d
+                  {:
+                      lista.agregarHijo(d);
+                      RESULT = lista;
+                  :}
+                | /* vacío */
+                  {:
+                      RESULT = new NodoAST("Declaraciones", "");
+                  :}
+                ;
+
+declaracion ::= tipo:t ID:nombre ASIGNAR expresion:e PUNTO_COMA
+                {:
+                    NodoAST nodo = new NodoAST("Declaracion", t.getValor() + " " + nombre);
+                    nodo.agregarHijo(e);
+                    RESULT = nodo;
+                :}
+              | tipo:t ID:nombre PUNTO_COMA
+                {:
+                    RESULT = new NodoAST("Declaracion", t.getValor() + " " + nombre);
+                :}
+              | tipo:t ID:nombre ASIGNAR error PUNTO_COMA
+                {:
+                    parser.report_error("Expresión inválida en la declaración de '" + nombre + "'", null);
+                    RESULT = new NodoAST("Declaracion", "<error>");
+                :}
+              | tipo:t ID:nombre error
+                {:
+                    parser.report_error("Se esperaba ';' al final de la declaración de '" + nombre + "'", null);
+                    RESULT = new NodoAST("Declaracion", "<error>");
+                :}
+              ;
+
+/* Tipo de dato: retorna un nodo con el nombre del tipo */
+tipo ::= YORU  {: RESULT = new NodoAST("Tipo", "yoru");  :}
+       | ZORO  {: RESULT = new NodoAST("Tipo", "zoro");  :}
+       | GOMU  {: RESULT = new NodoAST("Tipo", "gomu");  :}
+       | HAKI  {: RESULT = new NodoAST("Tipo", "haki");  :}
+       ;
+
+tipo_str ::= YORU  {: RESULT = "yoru"; :}
+           | ZORO  {: RESULT = "zoro"; :}
+           | GOMU  {: RESULT = "gomu"; :}
+           | HAKI  {: RESULT = "haki"; :}
+           ;
+
+
+/* ── Instrucciones ─────────────────────────────────────────── */
+
+instrucciones ::= instrucciones:lista instruccion:i
+                  {:
+                      lista.agregarHijo(i);
+                      RESULT = lista;
+                  :}
+                | /* vacío */
+                  {:
+                      RESULT = new NodoAST("Instrucciones", "");
+                  :}
+                ;
+
+instruccion ::= asignacion:a   {: RESULT = a; :}
+              | condicional:c  {: RESULT = c; :}
+              | ciclo_while:w  {: RESULT = w; :}
+              | ciclo_for:f    {: RESULT = f; :}
+              | impresion:p    {: RESULT = p; :}
+              | retorno:r      {: RESULT = r; :}
+              | funcion_def:fd {: RESULT = fd; :}
+              | error PUNTO_COMA
+                {:
+                    parser.report_error("Instrucción no válida", null);
+                    RESULT = new NodoAST("Error", "instruccion invalida");
+                :}
+              ;
+
+
+/* ── Asignación ─────────────────────────────────────────────── */
+
+asignacion ::= ID:nombre ASIGNAR expresion:e PUNTO_COMA
+               {:
+                   NodoAST nodo = new NodoAST("Asignacion", nombre);
+                   nodo.agregarHijo(e);
+                   RESULT = nodo;
+               :}
+             | ID:nombre ASIGNAR error PUNTO_COMA
+               {:
+                   parser.report_error("Expresión inválida en la asignación de '" + nombre + "'", null);
+                   RESULT = new NodoAST("Asignacion", "<error>");
+               :}
+             | ID:nombre ASIGNAR expresion:e error
+               {:
+                   parser.report_error("Se esperaba ';' al final de la asignación de '" + nombre + "'", null);
+                   NodoAST nodo = new NodoAST("Asignacion", nombre);
+                   nodo.agregarHijo(e);
+                   RESULT = nodo;
+               :}
+             ;
+
+
+/* ── Condicional luffy / sino ────────────────────────────────── */
+
+condicional ::= LUFFY PAREN_ABRE expresion:cond PAREN_CIERRA
+                    LLAVE_ABRE instrucciones:entonces LLAVE_CIERRA
+                    NAMI_ELSE
+                    LLAVE_ABRE instrucciones:alternativa LLAVE_CIERRA
+                {:
+                    NodoAST nodo = new NodoAST("Si", "luffy");
+                    nodo.agregarHijo(cond);
+                    nodo.agregarHijo(entonces);
+                    NodoAST siNo = new NodoAST("Sino", "sino");
+                    siNo.agregarHijo(alternativa);
+                    nodo.agregarHijo(siNo);
+                    RESULT = nodo;
+                :}
+              | LUFFY PAREN_ABRE expresion:cond PAREN_CIERRA
+                    LLAVE_ABRE instrucciones:entonces LLAVE_CIERRA
+                {:
+                    NodoAST nodo = new NodoAST("Si", "luffy");
+                    nodo.agregarHijo(cond);
+                    nodo.agregarHijo(entonces);
+                    RESULT = nodo;
+                :}
+              | LUFFY PAREN_ABRE error PAREN_CIERRA
+                    LLAVE_ABRE instrucciones:entonces LLAVE_CIERRA
+                {:
+                    parser.report_error("Condición inválida en 'luffy'", null);
+                    RESULT = new NodoAST("Si", "<error>");
+                :}
+              | LUFFY error LLAVE_ABRE instrucciones LLAVE_CIERRA
+                {:
+                    parser.report_error("Se esperaba '(' condición ')' en 'luffy'", null);
+                    RESULT = new NodoAST("Si", "<error>");
+                :}
+              ;
+
+
+/* ── Ciclo chopper (while) ──────────────────────────────────── */
+
+ciclo_while ::= CHOPPER PAREN_ABRE expresion:cond PAREN_CIERRA
+                    LLAVE_ABRE instrucciones:cuerpo LLAVE_CIERRA
+                {:
+                    NodoAST nodo = new NodoAST("Mientras", "chopper");
+                    nodo.agregarHijo(cond);
+                    nodo.agregarHijo(cuerpo);
+                    RESULT = nodo;
+                :}
+              | CHOPPER PAREN_ABRE error PAREN_CIERRA
+                    LLAVE_ABRE instrucciones LLAVE_CIERRA
+                {:
+                    parser.report_error("Condición inválida en 'chopper'", null);
+                    RESULT = new NodoAST("Mientras", "<error>");
+                :}
+              ;
+
+
+/* ── Ciclo robin (for) ──────────────────────────────────────── */
+
+ciclo_for ::= ROBIN PAREN_ABRE
+                  tipo_str:t ID:i ASIGNAR expresion:init PUNTO_COMA
+                  expresion:cond PUNTO_COMA
+                  ID:inc ASIGNAR expresion:paso
+              PAREN_CIERRA
+              LLAVE_ABRE instrucciones:cuerpo LLAVE_CIERRA
+              {:
+                  NodoAST nodo = new NodoAST("Para", "robin");
+                  NodoAST decl = new NodoAST("Declaracion", t + " " + i);
+                  decl.agregarHijo(init);
+                  nodo.agregarHijo(decl);
+                  nodo.agregarHijo(cond);
+                  NodoAST incNodo = new NodoAST("Asignacion", inc);
+                  incNodo.agregarHijo(paso);
+                  nodo.agregarHijo(incNodo);
+                  nodo.agregarHijo(cuerpo);
+                  RESULT = nodo;
+              :}
+            ;
+
+
+/* ── Impresión nami ──────────────────────────────────────────── */
+
+impresion ::= NAMI PAREN_ABRE expresion:e PAREN_CIERRA PUNTO_COMA
+              {:
+                  NodoAST nodo = new NodoAST("Imprimir", "nami");
+                  nodo.agregarHijo(e);
+                  RESULT = nodo;
+              :}
+            | NAMI PAREN_ABRE error PAREN_CIERRA PUNTO_COMA
+              {:
+                  parser.report_error("Expresión inválida dentro de 'nami(...)'", null);
+                  RESULT = new NodoAST("Imprimir", "<error>");
+              :}
+            | NAMI PAREN_ABRE expresion:e PAREN_CIERRA error
+              {:
+                  parser.report_error("Se esperaba ';' después de 'nami(...)'", null);
+                  NodoAST nodo = new NodoAST("Imprimir", "nami");
+                  nodo.agregarHijo(e);
+                  RESULT = nodo;
+              :}
+            ;
+
+
+/* ── Retorno sanji ───────────────────────────────────────────── */
+
+retorno ::= SANJI expresion:e PUNTO_COMA
+            {:
+                NodoAST nodo = new NodoAST("Retorno", "sanji");
+                nodo.agregarHijo(e);
+                RESULT = nodo;
+            :}
+          | SANJI error PUNTO_COMA
+            {:
+                parser.report_error("Expresión inválida después de 'sanji'", null);
+                RESULT = new NodoAST("Retorno", "<error>");
+            :}
+          | SANJI expresion:e error
+            {:
+                parser.report_error("Se esperaba ';' después de 'sanji ...'", null);
+                NodoAST nodo = new NodoAST("Retorno", "sanji");
+                nodo.agregarHijo(e);
+                RESULT = nodo;
+            :}
+          ;
+
+
+/* ── Definición de función usopp ─────────────────────────────── */
+
+funcion_def ::= USOPP ID:nombre PAREN_ABRE params:p PAREN_CIERRA
+                    LLAVE_ABRE
+                        declaraciones:decls
+                        instrucciones:insts
+                    LLAVE_CIERRA
+                {:
+                    NodoAST nodo = new NodoAST("Funcion", nombre);
+                    nodo.agregarHijo(p);
+                    nodo.agregarHijo(decls);
+                    nodo.agregarHijo(insts);
+                    RESULT = nodo;
+                :}
+              | USOPP ID:nombre PAREN_ABRE PAREN_CIERRA
+                    LLAVE_ABRE
+                        declaraciones:decls
+                        instrucciones:insts
+                    LLAVE_CIERRA
+                {:
+                    NodoAST nodo = new NodoAST("Funcion", nombre);
+                    nodo.agregarHijo(new NodoAST("Params", ""));
+                    nodo.agregarHijo(decls);
+                    nodo.agregarHijo(insts);
+                    RESULT = nodo;
+                :}
+              ;
+
+params ::= params:lista COMA param:p
+           {:
+               lista.agregarHijo(p);
+               RESULT = lista;
+           :}
+         | param:p
+           {:
+               NodoAST lista = new NodoAST("Params", "");
+               lista.agregarHijo(p);
+               RESULT = lista;
+           :}
+         ;
+
+param ::= tipo_str:t ID:nombre
+          {:
+              RESULT = new NodoAST("Param", t + " " + nombre);
+          :}
+        ;
+
+
+/* ── Expresiones (jerarquía de precedencia) ─────────────────────
+   El orden de las producciones define la precedencia implícita:
+   - Las producciones más profundas en la recursión tienen
+     mayor precedencia (se evalúan primero).
+   - Operadores en el mismo nivel son asociativos izquierdos
+     (gracias a la directiva "precedence left" de la sección 2).
+
+   Jerarquía (de menor a mayor precedencia):
+     OR  →  AND  →  Igualdad  →  Relacional  →
+     Suma/Resta  →  Mult/Div/Mod  →  Unario  →  Primaria
+   ──────────────────────────────────────────────────────────── */
+
+expresion ::= expr_or:e {: RESULT = e; :}
+            ;
+
+expr_or ::= expr_or:izq O expr_and:der
+            {:
+                NodoAST nodo = new NodoAST("BinOp", "||");
+                nodo.agregarHijo(izq);
+                nodo.agregarHijo(der);
+                RESULT = nodo;
+            :}
+          | expr_and:e {: RESULT = e; :}
+          ;
+
+expr_and ::= expr_and:izq Y expr_igualdad:der
+             {:
+                 NodoAST nodo = new NodoAST("BinOp", "&&");
+                 nodo.agregarHijo(izq);
+                 nodo.agregarHijo(der);
+                 RESULT = nodo;
+             :}
+           | expr_igualdad:e {: RESULT = e; :}
+           ;
+
+expr_igualdad ::= expr_igualdad:izq IGUAL_IGUAL expr_relacional:der
+                  {:
+                      NodoAST nodo = new NodoAST("BinOp", "==");
+                      nodo.agregarHijo(izq);
+                      nodo.agregarHijo(der);
+                      RESULT = nodo;
+                  :}
+                | expr_igualdad:izq DIFERENTE expr_relacional:der
+                  {:
+                      NodoAST nodo = new NodoAST("BinOp", "!=");
+                      nodo.agregarHijo(izq);
+                      nodo.agregarHijo(der);
+                      RESULT = nodo;
+                  :}
+                | expr_relacional:e {: RESULT = e; :}
+                ;
+
+expr_relacional ::= expr_relacional:izq MENOR expr_suma:der
+                    {:
+                        NodoAST n = new NodoAST("BinOp","<");
+                        n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+                    :}
+                  | expr_relacional:izq MAYOR expr_suma:der
+                    {:
+                        NodoAST n = new NodoAST("BinOp",">");
+                        n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+                    :}
+                  | expr_relacional:izq MENOR_IGUAL expr_suma:der
+                    {:
+                        NodoAST n = new NodoAST("BinOp","<=");
+                        n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+                    :}
+                  | expr_relacional:izq MAYOR_IGUAL expr_suma:der
+                    {:
+                        NodoAST n = new NodoAST("BinOp",">=");
+                        n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+                    :}
+                  | expr_suma:e {: RESULT = e; :}
+                  ;
+
+expr_suma ::= expr_suma:izq MAS expr_mult:der
+              {:
+                  NodoAST n = new NodoAST("BinOp","+");
+                  n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+              :}
+            | expr_suma:izq MENOS expr_mult:der
+              {:
+                  NodoAST n = new NodoAST("BinOp","-");
+                  n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+              :}
+            | expr_mult:e {: RESULT = e; :}
+            ;
+
+expr_mult ::= expr_mult:izq POR expr_unaria:der
+              {:
+                  NodoAST n = new NodoAST("BinOp","*");
+                  n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+              :}
+            | expr_mult:izq DIVIDIR expr_unaria:der
+              {:
+                  NodoAST n = new NodoAST("BinOp","/");
+                  n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+              :}
+            | expr_mult:izq MODULO expr_unaria:der
+              {:
+                  NodoAST n = new NodoAST("BinOp","%");
+                  n.agregarHijo(izq); n.agregarHijo(der); RESULT=n;
+              :}
+            | expr_unaria:e {: RESULT = e; :}
+            ;
+
+expr_unaria ::= NO expr_unaria:e
+                {:
+                    NodoAST n = new NodoAST("UnOp","!");
+                    n.agregarHijo(e); RESULT=n;
+                :}
+              | MENOS expr_unaria:e
+                {:
+                    NodoAST n = new NodoAST("UnOp","-");
+                    n.agregarHijo(e); RESULT=n;
+                :}
+              | primaria:p {: RESULT = p; :}
+              ;
+
+primaria ::= ENTERO:v     {: RESULT = new NodoAST("Entero",  String.valueOf(v)); :}
+           | DECIMAL:v    {: RESULT = new NodoAST("Decimal", String.valueOf(v)); :}
+           | CADENA:v     {: RESULT = new NodoAST("Cadena",  v);                :}
+           | MERA          {: RESULT = new NodoAST("Bool",    "mera");           :}
+           | KAIRYU        {: RESULT = new NodoAST("Bool",    "kairyu");         :}
+           | ID:nombre    {: RESULT = new NodoAST("ID",      nombre);           :}
+           | PAREN_ABRE expresion:e PAREN_CIERRA
+             {:
+                 NodoAST n = new NodoAST("Grupo","");
+                 n.agregarHijo(e);
+                 RESULT = n;
+             :}
+           | PAREN_ABRE error PAREN_CIERRA
+             {:
+                 parser.report_error("Expresión inválida dentro de paréntesis", null);
+                 RESULT = new NodoAST("Error","expr invalida");
+             :}
+           | PAREN_ABRE expresion:e error
+             {:
+                 parser.report_error("Se esperaba ')' para cerrar la expresión", null);
+                 NodoAST n = new NodoAST("Grupo","");
+                 n.agregarHijo(e);
+                 RESULT = n;
+             :}
+           ;

@@ -1,0 +1,103 @@
+// ====================================================
+// PRUEBA 1 - Válida: Variables y operaciones básicas
+// ====================================================
+nakama Prueba1 {
+    yoru a = 10;
+    yoru b = 20;
+    yoru suma = a + b;
+    nami(suma);
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 2 - Válida: Condicional luffy/sino
+// ====================================================
+nakama Prueba2 {
+    yoru edad = 21;
+    luffy (edad >= 18) {
+        nami("Eres mayor de edad, nakama!");
+    } sino {
+        nami("Eres menor, sigue entrenando!");
+    }
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 3 - Válida: Ciclo chopper (while)
+// ====================================================
+nakama Prueba3 {
+    yoru i = 0;
+    chopper (i < 10) {
+        nami(i);
+        i = i + 1;
+    }
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 4 - Válida: Función con usopp
+// ====================================================
+nakama Prueba4 {
+    usopp potencia(yoru base, yoru exp) {
+        yoru resultado = base * exp;
+        sanji resultado;
+    }
+    nami("Funcion definida!");
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 5 - Válida: Múltiples tipos y booleano
+// ====================================================
+nakama Prueba5 {
+    gomu nombre = "Roronoa Zoro";
+    zoro altura = 1.81;
+    haki esPirata = mera;
+    nami(nombre);
+    nami(altura);
+    nami(esPirata);
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 6 - ERROR LÉXICO: Carácter no permitido '@'
+// ====================================================
+nakama PruebaError1 {
+    yoru x = 10@5;
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 7 - ERROR LÉXICO: Cadena sin cerrar
+// ====================================================
+nakama PruebaError2 {
+    gomu msg = "Hola nakama;
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 8 - ERROR SINTÁCTICO: Falta punto y coma
+// ====================================================
+nakama PruebaError3 {
+    yoru x = 5
+    yoru y = 10;
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 9 - ERROR SINTÁCTICO: Paréntesis sin cerrar
+// ====================================================
+nakama PruebaError4 {
+    luffy (x > 0 {
+        nami(x);
+    }
+}
+kaizoku
+
+// ====================================================
+// PRUEBA 10 - ERROR SINTÁCTICO: Falta kaizoku
+// ====================================================
+nakama PruebaError5 {
+    yoru z = 100;
+    nami(z);
+}
