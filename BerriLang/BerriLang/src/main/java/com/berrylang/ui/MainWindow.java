@@ -26,7 +26,7 @@ public class MainWindow extends JFrame {
     private JTable         tablaTokens;
     private JTable         tablaErrores;
     private JTable         tablaSimbolos;
-    private TreeRenderer   treePanel;
+    private TreePanel      treePanel;
     private JLabel         statusLabel;
     private JTabbedPane    bottomTabs;
 
@@ -49,7 +49,6 @@ public class MainWindow extends JFrame {
         setSize(1280, 780);
         setMinimumSize(new Dimension(900, 600));
         setLocationRelativeTo(null);
-
         // Icono
         try {
             Image icon = Toolkit.getDefaultToolkit()
@@ -188,9 +187,15 @@ public class MainWindow extends JFrame {
         bottomTabs.addTab("❌ Errores",   crearTabTabla("Errores", crearModeloErrores()));
         // Tab 4: Símbolos
         bottomTabs.addTab("📦 Símbolos",  crearTabTabla("Simbolos", crearModeloSimbolos()));
-        // Tab 5: Árbol
-        treePanel = new TreeRenderer();
-        bottomTabs.addTab("🌳 Árbol AST", treePanel);
+        // Tab 5: Arbol de derivacion (estilo pizarron)
+        treePanel = new TreePanel();
+        JScrollPane scrollArbol = new JScrollPane(treePanel);
+        scrollArbol.setBackground(OnePieceTheme.BG_PANEL);
+        scrollArbol.setBorder(BorderFactory.createLineBorder(OnePieceTheme.ACCENT_GOLD, 1));
+        scrollArbol.getViewport().setBackground(new Color(0x1A1E27));
+        scrollArbol.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scrollArbol.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        bottomTabs.addTab("Arbol AST", scrollArbol);
 
         p.add(bottomTabs, BorderLayout.CENTER);
         return p;
@@ -354,14 +359,14 @@ public class MainWindow extends JFrame {
         if (result.isExitoso()) {
             consoleArea.setForeground(OnePieceTheme.TEXT_SUCCESS);
             consoleArea.setText(
-                "╔══════════════════════════════════════╗\n" +
-                "║  ✅  Compilación exitosa               ║\n" +
-                "╚══════════════════════════════════════╝\n\n" +
-                "  🏴‍☠️  ¡King of the Pirates! El código es válido.\n\n" +
-                "  Tokens encontrados : " + (result.getTokens().size()-1) + "\n" +
-                "  Símbolos definidos : " + result.getSimbolos().size() + "\n" +
-                "  Errores            : 0\n\n" +
-                result.getArbol().toString()
+                    "╔══════════════════════════════════════╗\n" +
+                            "║  ✅  Compilación exitosa               ║\n" +
+                            "╚══════════════════════════════════════╝\n\n" +
+                            "  🏴‍☠️  ¡King of the Pirates! El código es válido.\n\n" +
+                            "  Tokens encontrados : " + (result.getTokens().size()-1) + "\n" +
+                            "  Símbolos definidos : " + result.getSimbolos().size() + "\n" +
+                            "  Errores            : 0\n\n" +
+                            result.getArbol().toString()
             );
             setStatus("✅  Compilación exitosa — " + (result.getTokens().size()-1) + " tokens, " +
                     result.getSimbolos().size() + " símbolos", OnePieceTheme.TEXT_SUCCESS);
@@ -374,9 +379,9 @@ public class MainWindow extends JFrame {
             sb.append("╚══════════════════════════════════════╝\n\n");
             for (ErrorEntry e : result.getErrores()) {
                 sb.append("  [").append(e.getTipo()).append("] Línea ")
-                  .append(e.getLinea()).append(", Col ").append(e.getColumna())
-                  .append(" → ").append(e.getDescripcion()).append("\n")
-                  .append("         Causa: ").append(e.getCausa()).append("\n\n");
+                        .append(e.getLinea()).append(", Col ").append(e.getColumna())
+                        .append(" → ").append(e.getDescripcion()).append("\n")
+                        .append("         Causa: ").append(e.getCausa()).append("\n\n");
             }
             consoleArea.setText(sb.toString());
             setStatus("❌  " + result.getErrores().size() + " error(es) encontrado(s)", OnePieceTheme.TEXT_ERROR);
@@ -439,20 +444,31 @@ public class MainWindow extends JFrame {
 
     private void cargarEjemplo() {
         editorArea.setText(
-                "// ====================================================\n" +
-                        "// PRUEBA  - Válida: Múltiples tipos y booleano\n" +
-                        "// ====================================================\n" +
-                        "nakama Prueba{\n" +
-                        "    gomu nombre = \"Roronoa Zoro\";\n" +
-                        "    zoro altura = 1.81;\n" +
-                        "    haki esPirata = mera;\n" +
+                "// Programa de ejemplo en BerriLang - Temática One Piece\n" +
+                        "nakama MiPrimerPrograma {\n" +
+                        "    yoru edad = 19;\n" +
+                        "    zoro promedio = 85.5;\n" +
+                        "    gomu nombre = \"Monkey D. Luffy\";\n" +
+                        "    haki esCapitan = mera;\n\n" +
                         "    nami(nombre);\n" +
-                        "    nami(altura);\n" +
-                        "    nami(esPirata);\n" +
+                        "    nami(edad);\n\n" +
+                        "    luffy (edad >= 18) {\n" +
+                        "        nami(\"El nakama es mayor de edad\");\n" +
+                        "    } sino {\n" +
+                        "        nami(\"El nakama es menor de edad\");\n" +
+                        "    }\n\n" +
+                        "    yoru contador = 0;\n" +
+                        "    chopper (contador < 5) {\n" +
+                        "        nami(contador);\n" +
+                        "        contador = contador + 1;\n" +
+                        "    }\n\n" +
+                        "    usopp sumar(yoru a, yoru b) {\n" +
+                        "        yoru resultado = a + b;\n" +
+                        "        sanji resultado;\n" +
+                        "    }\n" +
                         "}\n" +
                         "kaizoku\n"
         );
-
         setStatus("📋  Ejemplo cargado. Presiona ▶ Compilar.", OnePieceTheme.TEXT_SECONDARY);
     }
 
