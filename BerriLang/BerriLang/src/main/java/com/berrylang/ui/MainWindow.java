@@ -457,11 +457,7 @@ public class MainWindow extends JFrame {
                         "    } sino {\n" +
                         "        nami(\"El nakama es menor de edad\");\n" +
                         "    }\n\n" +
-                        "    yoru contador = 0;\n" +
-                        "    chopper (contador < 5) {\n" +
-                        "        nami(contador);\n" +
-                        "        contador = contador + 1;\n" +
-                        "    }\n\n" +
+
                         "    usopp sumar(yoru a, yoru b) {\n" +
                         "        yoru resultado = a + b;\n" +
                         "        sanji resultado;\n" +
