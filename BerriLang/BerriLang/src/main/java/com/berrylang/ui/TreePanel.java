@@ -46,7 +46,7 @@ public class TreePanel extends JPanel {
     // ── Estado ───────────────────────────────────────────────────────────
     private NodoAST raiz = null;
 
-    // Posición calculada de cada nodo: mapeamos nodo → Rectangle (x, y centro-superior)
+    // Posición calculada de cada nodo: mapeamos nodo → Point (centro-superior)
     private final Map<NodoAST, Point> posiciones = new HashMap<>();
     private Dimension totalSize = new Dimension(800, 400);
 
@@ -67,11 +67,12 @@ public class TreePanel extends JPanel {
             // Paso 1: calcular anchos de subárboles
             calcularAnchos(raiz);
             // Paso 2: asignar posiciones X e Y
+            // nivel empieza en 0 para que la raíz quede pegada arriba
             int[] xCursor = { MARGIN };
-            asignarPosiciones(raiz, xCursor, MARGIN);
+            asignarPosiciones(raiz, xCursor, 0);
             // Paso 3: calcular tamaño total del canvas
             int maxX = posiciones.values().stream().mapToInt(p -> p.x).max().orElse(400) + NODE_W + MARGIN;
-            int maxY = posiciones.values().stream().mapToInt(p -> p.y).max().orElse(200) + NODE_H + MARGIN * 2;
+            int maxY = posiciones.values().stream().mapToInt(p -> p.y).max().orElse(200) + NODE_H + MARGIN;
             totalSize = new Dimension(maxX, maxY);
         }
         setPreferredSize(totalSize);
@@ -120,11 +121,12 @@ public class TreePanel extends JPanel {
     /**
      * Asigna la posición (x, y) a cada nodo.
      * xCursor[0] es la posición x actual del extremo izquierdo disponible.
-     * El nivel determina la Y.
+     * El nivel determina la Y. nivel=0 → raíz pegada al tope con solo MARGIN.
      */
     private void asignarPosiciones(NodoAST nodo, int[] xCursor, int nivel) {
         List<NodoAST> hijos = nodo.getHijos();
         int anchoTotal = anchos.get(nodo);
+        // Y calculado desde el margen superior, sin duplicar MARGIN
         int y = MARGIN + nivel * V_GAP;
 
         if (hijos.isEmpty()) {
@@ -164,7 +166,7 @@ public class TreePanel extends JPanel {
             return;
         }
         Graphics2D g2 = (Graphics2D) g;
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,    RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,      RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
 
         // Primero dibujamos todas las líneas (para que queden detrás de los nodos)
